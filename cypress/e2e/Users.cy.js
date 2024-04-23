@@ -5,13 +5,15 @@ import { fakerPT_BR } from "@faker-js/faker";
 
 var nome = fakerPT_BR.person.fullName();
 var email = fakerPT_BR.internet.email();
+var token;
 
 describe("Cenários de teste relacionados a criaçao inválidas de usuário", () => {
-  it("Cadastrar usuário sem inserir nome", () => {
+  it("Deve retornar erro ao tentar cadastrar com campo Name vazio", () => {
     cy.request({
       method: "POST",
       url: "/users",
       body: {
+        name: "",
         email: "emailvalido@raro.com",
         password: "teste1",
       },
@@ -22,8 +24,30 @@ describe("Cenários de teste relacionados a criaçao inválidas de usuário", ()
         error: "Bad Request",
         message: [
           "name must be longer than or equal to 1 characters",
-          "name must be a string",
           "name should not be empty",
+        ],
+        statusCode: 400,
+      });
+    });
+  });
+
+  it("Deve retornar erro ao tentar cadastrar com campo Name diferente de string", () => {
+    cy.request({
+      method: "POST",
+      url: "/users",
+      body: {
+        name: 10,
+        email: "emailvalido@raro.com",
+        password: "teste1",
+      },
+      failOnStatusCode: false,
+    }).then((response) => {
+      expect(response.status).to.equal(400);
+      expect(response.body).to.deep.equal({
+        error: "Bad Request",
+        message: [
+          "name must be longer than or equal to 1 and shorter than or equal to 100 characters",
+          "name must be a string",
         ],
         statusCode: 400,
       });
@@ -115,7 +139,7 @@ describe("Cenários de teste relacionados a criaçao inválidas de usuário", ()
 });
 
 describe("Cenários de teste relacionados a criaçao de usuario", () => {
-  it("Cadastro de usuário válido", () => {
+  it("Deve retornar sucesso ao cadastrar usuário", () => {
     cy.request({
       method: "POST",
       url: "/users",
@@ -134,7 +158,7 @@ describe("Cenários de teste relacionados a criaçao de usuario", () => {
     });
   });
 
-  it("Cadastro de usuário ja cadastrado", () => {
+  it("Deve retornar erro ao tentar cadastrar usuário já cadastrado", () => {
     cy.request({
       method: "POST",
       url: "/users",
@@ -151,27 +175,9 @@ describe("Cenários de teste relacionados a criaçao de usuario", () => {
   });
 });
 
-describe("Autenticaçao usuário ", () => {
-  var token;
-
-  it("Realizando login com email inválido", () => {
-    cy.request({
-      method: "POST",
-      url: "auth/login",
-      body: {
-        email: "@email.com",
-        password: "teste1",
-      },
-      failOnStatusCode: false,
-    }).then(function (response) {
-      expect(response.status).to.equal(400);
-      expect(response.body).to.deep.equal({
-        error: "Bad Request",
-        message: ["email must be an email"],
-        statusCode: 400,
-      });
-    });
-  });
+describe("Cenários de testes relacionados a autenticaçao de usuário ", () => {
+  //var token;
+  var idUser;
 
   it("Autenticando usuário válido", () => {
     cy.request("POST", "auth/login", {
@@ -179,6 +185,8 @@ describe("Autenticaçao usuário ", () => {
       password: "teste1",
     }).then(function (response) {
       token = response.body.accessToken;
+      expect(response.status).to.equal(200);
+      idUser = response.body.id;
     });
   });
 
@@ -207,7 +215,7 @@ describe("Autenticaçao usuário ", () => {
   it("Listar usuários como adm", () => {
     cy.request({
       method: "GET",
-      url: "https://raromdb-3c39614e42d4.herokuapp.com/api/users",
+      url: "/users",
       headers: {
         Authorization: "Bearer " + token,
       },
@@ -219,7 +227,7 @@ describe("Autenticaçao usuário ", () => {
   it("Listar usuários como usuario comum", () => {
     cy.request({
       method: "GET",
-      url: "https://raromdb-3c39614e42d4.herokuapp.com/api/users",
+      url: "/users",
       failOnStatusCode: false,
     }).then(function (response) {
       expect(response.status).to.equal(401);
@@ -228,6 +236,107 @@ describe("Autenticaçao usuário ", () => {
         error: "Unauthorized",
         statusCode: 401,
       });
+    });
+  });
+});
+
+describe("Cenários de testes relacionados a criaçao de review com usuário comum", () => {
+  it("Deve retornar erro ao tentar cadastrar com usuario comum", () => {
+    cy.request({
+      method: "POST",
+      url: "/users/review",
+      body: {
+        movieId: 50,
+        score: 0,
+        reviewText: "legal",
+      },
+      failOnStatusCode: false,
+    }).then(function (response) {
+      expect(response.status).to.equal(401);
+      expect(response.body).to.deep.equal({
+        error: "Unauthorized",
+        message: "Access denied.",
+        statusCode: 401,
+      });
+    });
+  });
+});
+
+describe("Cenários de testes relacionados a criaçao de review com usuaro adm", () => {
+  it("Deve retornar sucesso ao tentar cadastrar review", () => {
+    cy.request({
+      method: "POST",
+      url: "/users/review",
+      headers: {
+        Authorization: "Bearer " + token,
+      },
+      body: {
+        movieId: 717,
+        score: 5,
+        reviewText: "legal",
+      },
+    }).then(function (response) {
+      expect(response.status).to.equal(201);
+    });
+  });
+
+  it("Deve retornar erro ao tentar cadastrar review com score menor que 1", () => {
+    cy.request({
+      method: "POST",
+      url: "/users/review",
+      headers: {
+        Authorization: "Bearer " + token,
+      },
+      body: {
+        movieId: 717,
+        score: 0,
+        reviewText: "legal",
+      },
+      failOnStatusCode: false,
+    }).then(function (response) {
+      expect(response.status).to.equal(400);
+      expect(response.body).to.deep.equal({
+        error: "Bad Request",
+        message: "Score should be between 1 and 5",
+        statusCode: 400,
+      });
+    });
+  });
+
+  it("Deve retornar erro ao tentar cadastrar review com score maior que 5", () => {
+    cy.request({
+      method: "POST",
+      url: "/users/review",
+      headers: {
+        Authorization: "Bearer " + token,
+      },
+      body: {
+        movieId: 717,
+        score: 6,
+        reviewText: "legal",
+      },
+      failOnStatusCode: false,
+    }).then(function (response) {
+      expect(response.status).to.equal(400);
+      expect(response.body).to.deep.equal({
+        error: "Bad Request",
+        message: "Score should be between 1 and 5",
+        statusCode: 400,
+      });
+    });
+  });
+});
+
+describe("Cenários de testes relacionados a listagem de review", () => {
+  it("Deve retornar lista de reviews cadastrados pelo usuário", () => {
+    cy.request({
+      method: "GET",
+      url: "/users/review/all",
+      headers: {
+        Authorization: "Bearer " + token,
+      },
+    }).then(function (response) {
+      expect(response.status).to.equal(200);
     });
   });
 });

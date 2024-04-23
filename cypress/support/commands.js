@@ -26,3 +26,45 @@
 // Cypress.Commands.add("deletarUsuario", function (id) {
 //   cy.request("DELETE", "/users/" + id);
 // });
+
+import { fakerPT_BR } from "@faker-js/faker";
+
+var nome = fakerPT_BR.person.fullName();
+var email = fakerPT_BR.internet.email();
+var token;
+
+Cypress.Commands.add("userCreate", () => {
+  cy.request({
+    method: "POST",
+    url: "/users",
+    body: {
+      name: nome,
+      email: email,
+      password: "teste1",
+    },
+  });
+});
+
+Cypress.Commands.add("userLogin", () => {
+  cy.request({
+    method: "POST",
+    url: "auth/login",
+    body: {
+      email: email,
+      password: "teste1",
+    },
+  }).then(function (response) {
+    token = response.body.accessToken;
+  });
+});
+
+Cypress.Commands.add("userAdmin", () => {
+  cy.request({
+    method: "PATCH",
+    url: "users/admin",
+    headers: {
+      Authorization: "Bearer " + token,
+    },
+  });
+});
+//export default Commands;
